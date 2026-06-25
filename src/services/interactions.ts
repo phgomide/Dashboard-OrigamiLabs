@@ -1,0 +1,4 @@
+import { assertNoError, requireSupabase } from './repository'
+export interface Interaction { id:string; leadId:string; type:string; description:string; createdAt:string }
+export async function listInteractions(leadId:string){const{data,error}=await requireSupabase().from('interactions').select('*').eq('lead_id',leadId).order('created_at',{ascending:false});assertNoError(error);return(data??[]).map((row)=>({id:String(row.id),leadId:String(row.lead_id),type:String(row.type),description:String(row.description),createdAt:String(row.created_at)}))}
+export async function createInteraction(leadId:string,type:string,description:string){const value={lead_id:leadId,type:type.trim().slice(0,80),description:description.trim().slice(0,3000)};if(!value.description)throw new Error('Descreva a interação.');const{data,error}=await requireSupabase().from('interactions').insert(value).select().single();assertNoError(error);return data}
