@@ -1,8 +1,8 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock3, FileText, ListFilter, MoreHorizontal, Plus, Target, TrendingUp, Users } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Badge, Button, Modal } from '../components/ui'
-import { projectMix, sourceMix } from '../data/mockData'
+import { Badge, Button, ConfirmDialog, Modal } from '../components/ui'
+import { funnelHealth, lossDistribution, projectConversion, reportInsight, revenueByProject, sourceDistribution } from '../lib/analytics'
 import { currency, shortDate } from '../lib/format'
 import { isSupabaseConfigured } from '../lib/supabase'
 import * as settingsService from '../services/settings'
@@ -16,6 +16,20 @@ const proposalStatuses: Proposal['status'][] = ['Rascunho', 'Enviada', 'Em negoc
 const projectStatuses: Project['status'][] = ['Aguardando início', 'Em desenvolvimento', 'Revisão', 'Ajustes finais', 'Entregue', 'Pausado', 'Cancelado']
 const projectStages: Project['currentStage'][] = ['Briefing', 'Estrutura', 'Design', 'Desenvolvimento', 'Revisão', 'Publicação', 'Entrega final']
 const paymentStatuses: PaymentStatus[] = ['Não se aplica', 'Pendente', 'Parcial', 'Pago']
+const settingCategories = ['Tipos de projeto','Planos','Nichos','Origens de lead','Status do pipeline','Prioridades','Temperaturas','Motivos de perda','Status de projeto','Status de pagamento']
+const settingColors = ['#5B7CFF','#7C5CFF','#22A06B','#F59E0B','#EC4899','#64748B']
+const settingDefaults: Record<string, string[]> = {
+  'Tipos de projeto': ['Origami Sites','Origami Agenda','Origami Organize','Site + Agenda','Agenda + Organize','Projeto personalizado'],
+  Planos: ['Essencial','Presença completa','Operação Pro','Projeto sob medida'],
+  Nichos: ['Petshop','Psicologia','Barbearia','Floricultura','Assistência técnica','Alimentação'],
+  'Origens de lead': ['Instagram','Indicação','Google','Prospecção','Evento local','LinkedIn'],
+  'Status do pipeline': ['Novo lead','Primeiro contato','Conversando','Reunião marcada','Diagnóstico feito','Proposta enviada','Negociação','Fechado','Perdido','Futuro'],
+  Prioridades: ['Alta','Média','Baixa'],
+  Temperaturas: ['Quente','Morno','Frio'],
+  'Motivos de perda': ['Momento financeiro','Sem prioridade','Escolheu concorrente','Sem retorno'],
+  'Status de projeto': ['Aguardando início','Em desenvolvimento','Revisão','Ajustes finais','Entregue','Pausado','Cancelado'],
+  'Status de pagamento': ['Pendente','Parcial','Pago'],
+}
 
 const chartTooltip = { borderRadius: 10, border: '1px solid #E5E7EB', boxShadow: '0 10px 30px rgba(17,24,39,.1)', fontSize: 11 }
 const today = () => new Date().toISOString().slice(0, 10)
@@ -41,6 +55,7 @@ function PageTitle({ eyebrow, title, description, action, onAction }: { eyebrow:
 function ActivityForm({ activity, leads, onClose }: { activity?: Activity; leads: Lead[]; onClose: () => void }) {
   const { addActivity, updateActivity, deleteActivity } = useAppStore()
   const [form, setForm] = useState<Activity>(activity ?? { id: crypto.randomUUID(), leadId: leads[0]?.id ?? '', title: '', type: 'Follow-up', date: today(), time: '09:00', status: 'Pendente', priority: 'Média', description: '' })
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (!form.title.trim()) return
@@ -57,13 +72,15 @@ function ActivityForm({ activity, leads, onClose }: { activity?: Activity; leads
     <label className="form-field">Status<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Activity['status'] })}>{activityStatuses.map((item) => <option key={item}>{item}</option>)}</select></label>
     <label className="form-field">Prioridade<select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value as Activity['priority'] })}>{priorities.map((item) => <option key={item}>{item}</option>)}</select></label>
     <label className="form-field form-field--wide">Descrição<textarea rows={4} value={form.description ?? ''} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
-    <div className="form-actions">{activity && <Button type="button" variant="danger" onClick={async () => { if (window.confirm('Excluir esta ação?')) { await deleteActivity(activity.id); onClose() } }}>Excluir</Button>}<Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button><Button type="submit">Salvar ação</Button></div>
+    <div className="form-actions">{activity && <Button type="button" variant="danger" onClick={() => setConfirmingDelete(true)}>Excluir</Button>}<Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button><Button type="submit">Salvar ação</Button></div>
+    {confirmingDelete && activity && <ConfirmDialog title="Remover ação?" description={`A ação "${activity.title}" será removida da agenda.`} onCancel={() => setConfirmingDelete(false)} onConfirm={async () => { await deleteActivity(activity.id); onClose() }} />}
   </form></Modal>
 }
 
 function ProposalForm({ proposal, leads, onClose }: { proposal?: Proposal; leads: Lead[]; onClose: () => void }) {
   const { addProposal, updateProposal, deleteProposal } = useAppStore()
   const [form, setForm] = useState<Proposal>(proposal ?? { id: crypto.randomUUID(), leadId: leads[0]?.id ?? '', projectType: leads[0]?.projectInterest ?? 'Origami Sites', planName: 'Essencial', value: leads[0]?.estimatedValue ?? 897, status: 'Rascunho', sentAt: today(), validUntil: addDays(today(), 10), probability: 50, notes: '' })
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (!form.leadId || !form.projectType.trim()) return
@@ -81,7 +98,8 @@ function ProposalForm({ proposal, leads, onClose }: { proposal?: Proposal; leads
     <label className="form-field">Validade<input type="date" value={form.validUntil} onChange={(e) => setForm({ ...form, validUntil: e.target.value })} /></label>
     <label className="form-field form-field--wide">Probabilidade<input type="range" min="0" max="100" value={form.probability} onChange={(e) => setForm({ ...form, probability: Number(e.target.value) })} /><span>{form.probability}%</span></label>
     <label className="form-field form-field--wide">Notas<textarea rows={4} value={form.notes ?? ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
-    <div className="form-actions">{proposal && <Button type="button" variant="danger" onClick={async () => { if (window.confirm('Excluir esta proposta?')) { await deleteProposal(proposal.id); onClose() } }}>Excluir</Button>}<Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button><Button type="submit">Salvar proposta</Button></div>
+    <div className="form-actions">{proposal && <Button type="button" variant="danger" onClick={() => setConfirmingDelete(true)}>Excluir</Button>}<Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button><Button type="submit">Salvar proposta</Button></div>
+    {confirmingDelete && proposal && <ConfirmDialog title="Remover proposta?" description={`A proposta ${proposal.planName} será removida do histórico comercial.`} onCancel={() => setConfirmingDelete(false)} onConfirm={async () => { await deleteProposal(proposal.id); onClose() }} />}
   </form></Modal>
 }
 
@@ -91,6 +109,7 @@ function ProjectForm({ project, leads, onClose }: { project?: Project; leads: Le
   const eligibleLeads = closedLeads.length ? closedLeads : leads
   const firstLead = eligibleLeads[0]
   const [form, setForm] = useState<Project>(project ?? { id: crypto.randomUUID(), leadId: firstLead?.id ?? '', projectType: firstLead?.projectInterest ?? 'Origami Sites', value: firstLead?.finalValue ?? firstLead?.estimatedValue ?? 897, status: 'Aguardando início', currentStage: 'Briefing', paymentStatus: 'Pendente', startedAt: today(), deadline: addDays(today(), 21), notes: '' })
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (!form.leadId || !form.projectType.trim()) return
@@ -108,7 +127,8 @@ function ProjectForm({ project, leads, onClose }: { project?: Project; leads: Le
     <label className="form-field">Início<input type="date" value={form.startedAt} onChange={(e) => setForm({ ...form, startedAt: e.target.value })} /></label>
     <label className="form-field">Prazo<input type="date" value={form.deadline} onChange={(e) => setForm({ ...form, deadline: e.target.value })} /></label>
     <label className="form-field form-field--wide">Notas<textarea rows={4} value={form.notes ?? ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
-    <div className="form-actions">{project && <Button type="button" variant="danger" onClick={async () => { if (window.confirm('Excluir este projeto?')) { await deleteProject(project.id); onClose() } }}>Excluir</Button>}<Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button><Button type="submit">Salvar projeto</Button></div>
+    <div className="form-actions">{project && <Button type="button" variant="danger" onClick={() => setConfirmingDelete(true)}>Excluir</Button>}<Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button><Button type="submit">Salvar projeto</Button></div>
+    {confirmingDelete && project && <ConfirmDialog title="Remover projeto?" description={`O projeto ${project.projectType} será removido do controle de entregas.`} onCancel={() => setConfirmingDelete(false)} onConfirm={async () => { await deleteProject(project.id); onClose() }} />}
   </form></Modal>
 }
 
@@ -153,56 +173,100 @@ export function FinancePage() {
   const paidClients = projects.filter((project) => project.paymentStatus === 'Pago').length
   const averageTicket = projects.length ? closedRevenue / projects.length : 0
   const biggest = projects.reduce((max, project) => Math.max(max, project.value), 0)
+  const revenueMix = useMemo(() => revenueByProject(projects), [projects])
   const monthly = useMemo(() => {
     const values = new Map<string, number>()
     projects.forEach((project) => values.set(monthLabel(project.startedAt || today()), (values.get(monthLabel(project.startedAt || today())) ?? 0) + project.value))
     return Array.from(values, ([month, value]) => ({ month, value })).slice(-6)
   }, [projects])
-  return <div className="page"><PageTitle eyebrow="Visão financeira" title="Financeiro" description="Receitas, previsões e pagamentos sem complexidade bancária." /><section className="finance-metrics"><article className="finance-hero"><span>Receita fechada total</span><strong>{currency.format(closedRevenue)}</strong><small><TrendingUp size={14}/> {projects.length} projetos fechados</small></article><article><span>Receita prevista</span><strong>{currency.format(expected)}</strong><small>{proposals.length} propostas</small></article><article><span>Valores pendentes</span><strong>{currency.format(pending)}</strong><small>{projects.filter((project) => project.paymentStatus !== 'Pago').length} pagamentos</small></article><article><span>Ticket médio</span><strong>{currency.format(averageTicket)}</strong><small>Maior projeto: {currency.format(biggest)}</small></article></section><section className="finance-layout"><article className="panel"><header className="panel__header"><div><span className="eyebrow">Evolução</span><h2>Receita por mês</h2></div><Badge tone="success">{paidClients} pagos</Badge></header><div className="finance-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={monthly}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EEF0F4"/><XAxis dataKey="month" axisLine={false} tickLine={false}/><YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `${Number(value)/1000}k`}/><Tooltip contentStyle={chartTooltip} formatter={(value) => currency.format(Number(value))}/><Bar dataKey="value" fill="#5B7CFF" radius={[5,5,2,2]}/></BarChart></ResponsiveContainer></div></article><article className="panel"><header className="panel__header"><div><span className="eyebrow">Distribuição</span><h2>Receita por oferta</h2></div></header><div className="revenue-mix">{projectMix.map((item) => <div key={item.name}><span><i style={{background:item.color}}/>{item.name}</span><strong>{currency.format(closedRevenue*item.value/100)}</strong><small>{item.value}%</small></div>)}</div></article></section><section className="panel payment-list"><header className="panel__header"><div><span className="eyebrow">Controle</span><h2>Pagamentos dos projetos</h2></div></header>{projects.map((project) => { const lead = leads.find((item) => item.id === project.leadId); return <div key={project.id}><span className="business-avatar">{(lead?.businessName ?? 'OR').slice(0,2).toUpperCase()}</span><span><strong>{lead?.businessName ?? 'Lead removido'}</strong><small>{project.projectType}</small></span><strong>{currency.format(project.value)}</strong><Badge tone={tone(project.paymentStatus)}>{project.paymentStatus}</Badge><time>{shortDate(project.deadline)}</time></div>})}</section></div>
+  return <div className="page"><PageTitle eyebrow="Visão financeira" title="Financeiro" description="Receitas, previsões e pagamentos sem complexidade bancária." /><section className="finance-metrics"><article className="finance-hero"><span>Receita fechada total</span><strong>{currency.format(closedRevenue)}</strong><small><TrendingUp size={14}/> {projects.length} projetos fechados</small></article><article><span>Receita prevista</span><strong>{currency.format(expected)}</strong><small>{proposals.length} propostas</small></article><article><span>Valores pendentes</span><strong>{currency.format(pending)}</strong><small>{projects.filter((project) => project.paymentStatus !== 'Pago').length} pagamentos</small></article><article><span>Ticket médio</span><strong>{currency.format(averageTicket)}</strong><small>Maior projeto: {currency.format(biggest)}</small></article></section><section className="finance-layout"><article className="panel"><header className="panel__header"><div><span className="eyebrow">Evolução</span><h2>Receita por mês</h2></div><Badge tone="success">{paidClients} pagos</Badge></header><div className="finance-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={monthly}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EEF0F4"/><XAxis dataKey="month" axisLine={false} tickLine={false}/><YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `${Number(value)/1000}k`}/><Tooltip contentStyle={chartTooltip} formatter={(value) => currency.format(Number(value))}/><Bar dataKey="value" fill="#5B7CFF" radius={[5,5,2,2]}/></BarChart></ResponsiveContainer></div></article><article className="panel"><header className="panel__header"><div><span className="eyebrow">Distribuição</span><h2>Receita por oferta</h2></div></header><div className="revenue-mix">{revenueMix.map((item) => <div key={item.name}><span><i style={{background:item.color}}/>{item.name}</span><strong>{currency.format(item.amount)}</strong><small>{item.value}%</small></div>)}</div>{revenueMix.length === 0 && <div className="table-empty">Nenhum projeto fechado ainda.</div>}</article></section><section className="panel payment-list"><header className="panel__header"><div><span className="eyebrow">Controle</span><h2>Pagamentos dos projetos</h2></div></header>{projects.map((project) => { const lead = leads.find((item) => item.id === project.leadId); return <div key={project.id}><span className="business-avatar">{(lead?.businessName ?? 'OR').slice(0,2).toUpperCase()}</span><span><strong>{lead?.businessName ?? 'Lead removido'}</strong><small>{project.projectType}</small></span><strong>{currency.format(project.value)}</strong><Badge tone={tone(project.paymentStatus)}>{project.paymentStatus}</Badge><time>{shortDate(project.deadline)}</time></div>})}</section></div>
 }
 
 export function ReportsPage() {
-  const { leads } = useAppStore()
-  const losses = useMemo(() => {
-    const lost = leads.filter((lead) => lead.pipelineStatus === 'Perdido')
-    const total = Math.max(1, lost.length)
-    const counts = lost.reduce<Record<string, number>>((acc, lead) => ({ ...acc, [lead.lostReason ?? 'Sem motivo informado']: (acc[lead.lostReason ?? 'Sem motivo informado'] ?? 0) + 1 }), {})
-    return Object.entries(counts).map(([name, value]) => ({ name, value: Math.round((value / total) * 100) }))
-  }, [leads])
-  return <div className="page"><PageTitle eyebrow="Inteligência comercial" title="Relatórios" description="Entenda o que gera oportunidades e onde o funil perde força." /><section className="report-alert"><Target size={19}/><div><strong>Principal oportunidade</strong><p>Leads por indicação tendem a avançar melhor. Use os clientes entregues para pedir novas indicações qualificadas.</p></div><Button variant="secondary">Ver plano de ação</Button></section><section className="reports-grid"><article className="panel"><header className="panel__header"><div><span className="eyebrow">Aquisição</span><h2>Leads por origem</h2></div></header><div className="report-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={sourceMix} layout="vertical"><XAxis type="number" hide/><YAxis type="category" dataKey="name" width={70} axisLine={false} tickLine={false} tick={{fontSize:10}}/><Tooltip contentStyle={chartTooltip}/><Bar dataKey="value" fill="#5B7CFF" radius={[0,5,5,0]}/></BarChart></ResponsiveContainer></div></article><article className="panel"><header className="panel__header"><div><span className="eyebrow">Conversão</span><h2>Taxa por oferta</h2></div></header><div className="conversion-list">{projectMix.map((item,index) => <div key={item.name}><span>{item.name}</span><div><i style={{width:`${[31,28,24,19][index]}%`,background:item.color}}/></div><strong>{[31,28,24,19][index]}%</strong></div>)}</div></article><article className="panel"><header className="panel__header"><div><span className="eyebrow">Perdas</span><h2>Motivos de perda</h2></div></header><div className="loss-list">{losses.map((item,index) => <div key={item.name}><span><i style={{opacity:1-index*.18}}/>{item.name}</span><strong>{item.value}%</strong></div>)}</div></article><article className="panel"><header className="panel__header"><div><span className="eyebrow">Saúde do funil</span><h2>Atenções necessárias</h2></div></header><div className="health-list"><div><span className="overview-icon overview-icon--amber"><Clock3 size={17}/></span><span><strong>{leads.filter((lead) => !lead.nextActionDate && !['Fechado','Perdido'].includes(lead.pipelineStatus)).length} sem próxima ação</strong><small>Oportunidades podem esfriar</small></span><Badge tone="warning">Revisar</Badge></div><div><span className="overview-icon overview-icon--purple"><CalendarDays size={17}/></span><span><strong>{leads.filter((lead) => lead.pipelineStatus === 'Futuro').length} para retomar</strong><small>Oportunidades futuras mapeadas</small></span><Badge tone="purple">Agendar</Badge></div><div><span className="overview-icon overview-icon--green"><Users size={17}/></span><span><strong>{leads.filter((lead) => lead.temperature === 'Quente').length} leads quentes</strong><small>Priorize follow-ups de alta intenção</small></span><Badge tone="success">Ver lista</Badge></div></div></article></section></div>
+  const { activities, leads } = useAppStore()
+  const sources = useMemo(() => sourceDistribution(leads), [leads])
+  const conversions = useMemo(() => projectConversion(leads), [leads])
+  const losses = useMemo(() => lossDistribution(leads), [leads])
+  const insight = useMemo(() => reportInsight(leads), [leads])
+  const health = useMemo(() => funnelHealth(leads, activities), [leads, activities])
+  return <div className="page"><PageTitle eyebrow="Inteligência comercial" title="Relatórios" description="Entenda o que gera oportunidades e onde o funil perde força." /><section className="report-alert"><Target size={19}/><div><strong>{insight.title}</strong><p>{insight.description}</p></div><Button variant="secondary">Ver plano de ação</Button></section><section className="reports-grid"><article className="panel"><header className="panel__header"><div><span className="eyebrow">Aquisição</span><h2>Leads por origem</h2></div></header><div className="report-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={sources} layout="vertical"><XAxis type="number" hide/><YAxis type="category" dataKey="name" width={82} axisLine={false} tickLine={false} tick={{fontSize:10}}/><Tooltip contentStyle={chartTooltip} formatter={(value, name) => [name === 'count' ? `${value} leads` : `${value}%`, name === 'count' ? 'Volume' : 'Participação']}/><Bar dataKey="count" fill="#5B7CFF" radius={[0,5,5,0]}/></BarChart></ResponsiveContainer></div></article><article className="panel"><header className="panel__header"><div><span className="eyebrow">Conversão</span><h2>Taxa por oferta</h2></div></header><div className="conversion-list">{conversions.map((item) => <div key={item.name}><span>{item.name}</span><div><i style={{width:`${item.value}%`,background:item.color}}/></div><strong>{item.value}%</strong></div>)}</div>{conversions.length === 0 && <div className="table-empty">Cadastre leads para calcular conversão.</div>}</article><article className="panel"><header className="panel__header"><div><span className="eyebrow">Perdas</span><h2>Motivos de perda</h2></div></header><div className="loss-list">{losses.map((item,index) => <div key={item.name}><span><i style={{opacity:1-index*.18}}/>{item.name}</span><strong>{item.value}%</strong></div>)}</div>{losses.length === 0 && <div className="table-empty">Nenhum lead perdido registrado ainda.</div>}</article><article className="panel"><header className="panel__header"><div><span className="eyebrow">Saúde do funil</span><h2>Atenções necessárias</h2></div></header><div className="health-list"><div><span className="overview-icon overview-icon--amber"><Clock3 size={17}/></span><span><strong>{health.withoutAction} sem próxima ação</strong><small>{health.overdue} ações atrasadas no momento</small></span><Badge tone="warning">Revisar</Badge></div><div><span className="overview-icon overview-icon--purple"><CalendarDays size={17}/></span><span><strong>{health.future} para retomar</strong><small>{health.stalled} leads parados há mais de 7 dias</small></span><Badge tone="purple">Agendar</Badge></div><div><span className="overview-icon overview-icon--green"><Users size={17}/></span><span><strong>{health.hot} leads quentes</strong><small>Priorize follow-ups de alta intenção</small></span><Badge tone="success">Ver lista</Badge></div></div></article></section></div>
 }
 
 export function SettingsPage() {
   const [active, setActive] = useState('Tipos de projeto')
   const [options, setOptions] = useState<settingsService.SettingOption[]>([])
   const [draft, setDraft] = useState('')
+  const [notice, setNotice] = useState('')
+  const [error, setError] = useState('')
+  const [removing, setRemoving] = useState<settingsService.SettingOption | null>(null)
   const [loading, setLoading] = useState(false)
-  const categories = ['Tipos de projeto','Planos','Nichos','Origens de lead','Status do pipeline','Prioridades','Temperaturas','Motivos de perda','Status de projeto','Status de pagamento']
-  const fallback = useMemo<settingsService.SettingOption[]>(() => ['Origami Sites','Origami Agenda','Origami Organize','Site + Agenda','Agenda + Organize','Projeto personalizado'].map((label, index) => ({ id: `local-${index}`, category: active, label, value: label, color: ['#5B7CFF','#7C5CFF','#22A06B','#F59E0B','#EC4899','#64748B'][index], orderIndex: index, isActive: true })), [active])
+  const localKey = 'origami-settings-options-v1'
+  const defaults = useMemo<settingsService.SettingOption[]>(() => settingCategories.flatMap((category) => (settingDefaults[category] ?? []).map((label, index) => ({ id: `default-${category}-${label}`, category, label, value: label, color: settingColors[index % settingColors.length], orderIndex: index, isActive: true }))), [])
+
   useEffect(() => {
-    if (!isSupabaseConfigured) { setOptions(fallback); return }
+    if (!isSupabaseConfigured) {
+      try {
+        const saved = JSON.parse(localStorage.getItem(localKey) ?? 'null') as settingsService.SettingOption[] | null
+        setOptions(saved?.length ? saved : defaults)
+      } catch {
+        setOptions(defaults)
+      }
+      return
+    }
     let mounted = true
     setLoading(true)
-    settingsService.listSettings().then((items) => { if (mounted) setOptions(items.length ? items : fallback) }).catch(() => { if (mounted) setOptions(fallback) }).finally(() => { if (mounted) setLoading(false) })
+    settingsService.listSettings().then((items) => {
+      if (!mounted) return
+      const merged = [...items]
+      defaults.forEach((fallback) => {
+        if (!merged.some((item) => item.category === fallback.category && item.value === fallback.value)) merged.push(fallback)
+      })
+      setOptions(merged)
+    }).catch(() => {
+      if (mounted) {
+        setOptions(defaults)
+        setError('Não foi possível carregar opções do Supabase. Mostrando opções locais.')
+      }
+    }).finally(() => { if (mounted) setLoading(false) })
     return () => { mounted = false }
-  }, [fallback])
+  }, [defaults])
+
+  useEffect(() => {
+    if (!isSupabaseConfigured && options.length) localStorage.setItem(localKey, JSON.stringify(options))
+  }, [options])
+
   const visible = options.filter((option) => option.category === active)
-  const addOption = async () => {
+  const addOption = async (event?: FormEvent) => {
+    event?.preventDefault()
     const label = draft.trim()
     if (!label) return
-    const next = { category: active, label, value: label, color: '#5B7CFF', orderIndex: visible.length, isActive: true }
-    if (isSupabaseConfigured) {
-      const row = await settingsService.createSetting(next)
-      setOptions((items) => [...items, { id: String(row.id), ...next }])
-    } else {
-      setOptions((items) => [...items, { id: crypto.randomUUID(), ...next }])
+    setError('')
+    setNotice('')
+    if (visible.some((option) => option.value.toLowerCase() === label.toLowerCase())) {
+      setError('Essa opção já existe nesta categoria.')
+      return
     }
-    setDraft('')
+    const next = { category: active, label, value: label, color: '#5B7CFF', orderIndex: visible.length, isActive: true }
+    try {
+      const saved = isSupabaseConfigured ? await settingsService.createSetting(next) : { id: crypto.randomUUID(), ...next }
+      setOptions((items) => [...items, saved])
+      setDraft('')
+      setNotice(`${label} adicionado em ${active}.`)
+    } catch {
+      setError('Não foi possível salvar a opção. Verifique login e permissões no Supabase.')
+    }
   }
-  const removeOption = async (option: settingsService.SettingOption) => {
-    if (!window.confirm(`Remover ${option.label}?`)) return
-    if (isSupabaseConfigured && !option.id.startsWith('local-')) await settingsService.deleteSetting(option.id)
-    setOptions((items) => items.filter((item) => item.id !== option.id))
+  const removeOption = async () => {
+    if (!removing) return
+    try {
+      if (isSupabaseConfigured && !removing.id.startsWith('default-')) await settingsService.deleteSetting(removing.id)
+      setOptions((items) => items.filter((item) => item.id !== removing.id))
+      setNotice(`${removing.label} removido de ${removing.category}.`)
+      setRemoving(null)
+    } catch {
+      setError('Não foi possível remover a opção no Supabase.')
+      setRemoving(null)
+    }
   }
-  return <div className="page"><PageTitle eyebrow="Personalização" title="Configurações" description="Adapte o Command Center à operação da Origami Labs." /><section className="settings-layout"><aside className="panel settings-nav"><span>Configurações do workspace</span>{categories.map((category) => <button className={active === category ? 'active' : ''} onClick={() => setActive(category)} key={category}>{category}<ChevronRight size={14}/></button>)}</aside><article className="panel settings-content"><header><div><span className="eyebrow">Opções comerciais</span><h2>{active}</h2><p>{loading ? 'Carregando opções...' : 'Edite as opções disponíveis nos formulários e filtros.'}</p></div><Button onClick={addOption}><Plus size={16}/>Adicionar opção</Button></header><label className="settings-add">Nova opção<input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={`Adicionar em ${active.toLowerCase()}`} /></label><div className="settings-options">{visible.map((option,index) => <div key={option.id}><span className="drag-handle">::</span><span className="option-color" style={{background:option.color ?? ['#5B7CFF','#7C5CFF','#22A06B','#F59E0B','#EC4899','#64748B'][index%6]}}/><strong>{option.label}</strong><Badge tone={option.isActive ? 'success' : 'neutral'}>{option.isActive ? 'Ativo' : 'Inativo'}</Badge><button className="icon-button" onClick={() => removeOption(option)} aria-label={`Remover ${option.label}`}><MoreHorizontal size={17}/></button></div>)}</div><footer><span>{isSupabaseConfigured ? 'As alterações são persistidas no Supabase.' : 'Sem Supabase configurado, as alterações ficam nesta sessão demo.'}</span><Button onClick={addOption}>Salvar alterações</Button></footer></article></section></div>
+  return <div className="page"><PageTitle eyebrow="Personalização" title="Configurações" description="Adapte o Command Center à operação da Origami Labs." /><section className="settings-layout"><aside className="panel settings-nav"><span>Configurações do workspace</span>{settingCategories.map((category) => <button className={active === category ? 'active' : ''} onClick={() => { setActive(category); setDraft(''); setError(''); setNotice('') }} key={category}>{category}<ChevronRight size={14}/></button>)}</aside><article className="panel settings-content"><header><div><span className="eyebrow">Opções comerciais</span><h2>{active}</h2><p>{loading ? 'Carregando opções...' : 'Edite as opções disponíveis nos formulários e filtros.'}</p></div><Button disabled={!draft.trim()} onClick={() => void addOption()}><Plus size={16}/>Adicionar opção</Button></header><form className="settings-add" onSubmit={(event) => void addOption(event)}>Nova opção<input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={`Adicionar em ${active.toLowerCase()}`} />{error && <span className="settings-message settings-message--error">{error}</span>}{notice && <span className="settings-message">{notice}</span>}</form><div className="settings-options">{visible.map((option,index) => <div key={option.id}><span className="drag-handle">::</span><span className="option-color" style={{background:option.color ?? settingColors[index%settingColors.length]}}/><strong>{option.label}</strong><Badge tone={option.isActive ? 'success' : 'neutral'}>{option.isActive ? 'Ativo' : 'Inativo'}</Badge><button className="icon-button" onClick={() => setRemoving(option)} aria-label={`Remover ${option.label}`}><MoreHorizontal size={17}/></button></div>)}</div><footer><span>{isSupabaseConfigured ? 'As alterações são persistidas no Supabase quando você adiciona ou remove uma opção.' : 'Sem Supabase configurado, as alterações ficam salvas neste navegador.'}</span><Button disabled={!draft.trim()} onClick={() => void addOption()}>Salvar alteração</Button></footer></article></section>{removing && <ConfirmDialog title={`Remover ${removing.label}?`} description={`Essa opção deixará de aparecer em ${removing.category}. Você pode cadastrá-la novamente depois.`} onCancel={() => setRemoving(null)} onConfirm={removeOption} />}</div>
 }
