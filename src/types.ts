@@ -75,3 +75,68 @@ export interface Project {
   deadline: string
   notes?: string
 }
+
+export type OrigamiLeadStatus =
+  | 'novo'
+  | 'contatado'
+  | 'respondeu'
+  | 'interessado'
+  | 'proposta_enviada'
+  | 'fechado'
+  | 'perdido'
+  | 'sem_resposta'
+
+export interface OrigamiLead {
+  id: string
+  nomeNegocio: string
+  nomeDono: string | null
+  cidade: string
+  googleMapsUrl: string | null
+  telefone: string | null
+  whatsapp: string | null
+  instagram: string | null
+  site: string | null
+  nicho: string
+  oportunidade: string
+  score: number
+  observacaoComercial: string | null
+  status: OrigamiLeadStatus
+  origem: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export interface OrigamiLeadInput {
+  nomeNegocio: string
+  nomeDono: string | null
+  cidade: string
+  googleMapsUrl: string | null
+  telefone: string | null
+  whatsapp: string | null
+  instagram: string | null
+  site: string | null
+  nicho: string
+  oportunidade: string
+  score: number
+  observacaoComercial: string | null
+  status: OrigamiLeadStatus
+  origem: string
+}
+
+export type LeadImportAction = 'criar' | 'atualizar' | 'ignorar' | 'erro'
+
+export interface LeadImportPreviewRow {
+  index: number
+  action: LeadImportAction
+  input?: OrigamiLeadInput
+  existing?: OrigamiLead
+  updatePatch?: Partial<OrigamiLeadInput>
+  errors: string[]
+}
+
+export interface LeadImportSummary {
+  created: number
+  updated: number
+  ignored: number
+  errors: number
+}

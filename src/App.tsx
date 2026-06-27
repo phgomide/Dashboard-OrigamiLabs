@@ -15,11 +15,14 @@ const ProjectsPage = lazy(() => operations.then((module) => ({ default: module.P
 const FinancePage = lazy(() => operations.then((module) => ({ default: module.FinancePage })))
 const ReportsPage = lazy(() => operations.then((module) => ({ default: module.ReportsPage })))
 const SettingsPage = lazy(() => operations.then((module) => ({ default: module.SettingsPage })))
+const adminLeads = import('./pages/AdminLeadPages')
+const AdminLeadsPage = lazy(() => adminLeads.then((module) => ({ default: module.AdminLeadsPage })))
+const AdminLeadImportPage = lazy(() => adminLeads.then((module) => ({ default: module.AdminLeadImportPage })))
 
 function PageLoader() {
   return <div className="page" aria-busy="true" aria-label="Carregando página"><div className="page-skeleton"><span /><span /><span /><span /></div></div>
 }
 
 export default function App() {
-  return <AuthProvider><ProtectedRoute><AppStoreProvider><BrowserRouter><AppShell><Suspense fallback={<PageLoader />}><Routes><Route path="/" element={<DashboardPage />} /><Route path="/leads" element={<LeadsPage />} /><Route path="/pipeline" element={<PipelinePage />} /><Route path="/agenda" element={<AgendaPage />} /><Route path="/propostas" element={<ProposalsPage />} /><Route path="/projetos" element={<ProjectsPage />} /><Route path="/financeiro" element={<FinancePage />} /><Route path="/relatorios" element={<ReportsPage />} /><Route path="/configuracoes" element={<SettingsPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></Suspense></AppShell></BrowserRouter></AppStoreProvider></ProtectedRoute></AuthProvider>
+  return <AuthProvider><ProtectedRoute><AppStoreProvider><BrowserRouter><AppShell><Suspense fallback={<PageLoader />}><Routes><Route path="/" element={<DashboardPage />} /><Route path="/leads" element={<LeadsPage />} /><Route path="/pipeline" element={<PipelinePage />} /><Route path="/agenda" element={<AgendaPage />} /><Route path="/propostas" element={<ProposalsPage />} /><Route path="/projetos" element={<ProjectsPage />} /><Route path="/financeiro" element={<FinancePage />} /><Route path="/relatorios" element={<ReportsPage />} /><Route path="/admin/leads" element={<AdminLeadsPage />} /><Route path="/admin/leads/import" element={<AdminLeadImportPage />} /><Route path="/configuracoes" element={<SettingsPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></Suspense></AppShell></BrowserRouter></AppStoreProvider></ProtectedRoute></AuthProvider>
 }
