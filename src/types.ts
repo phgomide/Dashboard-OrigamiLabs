@@ -22,6 +22,15 @@ export interface Lead {
   source: string
   city: string
   publicLink?: string
+  ownerName?: string
+  googleMapsUrl?: string
+  phone?: string
+  whatsapp?: string
+  instagram?: string
+  website?: string
+  commercialNote?: string
+  importScore?: number
+  importOrigin?: string
   projectInterest: string
   pipelineStatus: PipelineStatus
   temperature: LeadTemperature

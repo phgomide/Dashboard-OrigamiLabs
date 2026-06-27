@@ -29,6 +29,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       .finally(() => { if(active)setLoading(false) })
     return () => { active=false }
   }, [demoMode])
+  useEffect(() => {
+    if (demoMode) return
+    const reloadLeads = () => {
+      leadService.listLeads().then(setLeads).catch(() => setError('Nao foi possivel atualizar os leads importados.'))
+    }
+    window.addEventListener('origami:leads-imported', reloadLeads)
+    return () => window.removeEventListener('origami:leads-imported', reloadLeads)
+  }, [demoMode])
   useEffect(() => { if(demoMode)localStorage.setItem(demoKey,JSON.stringify({leads})) },[demoMode,leads])
 
   const addLead=useCallback(async(lead:Lead)=>{const saved=demoMode?lead:await leadService.createLead(lead);setLeads((items)=>[saved,...items])},[demoMode])

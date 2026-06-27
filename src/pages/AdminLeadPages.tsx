@@ -106,7 +106,7 @@ export function AdminLeadImportPage() {
     setMessage(`${file.name} carregado.`)
   }
 
-  return <div className="page"><section className="page-heading"><div><span className="eyebrow">Prospecao interna</span><h1>Importar leads por JSON</h1><p>Valide uma lista manual, revise duplicidades e grave apenas o que faz sentido.</p></div><Link className="button button--secondary" to="/admin/leads"><Search size={16} />Ver base</Link></section>
+  return <div className="page"><section className="page-heading"><div><span className="eyebrow">Prospecao interna</span><h1>Importar leads por JSON</h1><p>Valide uma lista manual, revise duplicidades e envie direto para a pagina Leads.</p></div><Link className="button button--secondary" to="/leads"><Search size={16} />Ver leads</Link></section>
     <section className="import-layout">
       <article className="panel import-editor">
         <header className="panel__header"><div><span className="eyebrow">Entrada</span><h2>JSON manual</h2></div><FileJson size={19} /></header>

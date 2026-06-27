@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Bell, CalendarDays, ChartNoAxesCombined, CircleDollarSign, Database, FileJson, FileText, FolderKanban, LayoutDashboard, LogOut, Menu, Plus, Search, Settings, Sparkles, Users, X } from 'lucide-react'
+import { Bell, CalendarDays, ChartNoAxesCombined, CircleDollarSign, FileJson, FileText, FolderKanban, LayoutDashboard, LogOut, Menu, Plus, Search, Settings, Sparkles, Users, X } from 'lucide-react'
 import { Button } from '../components/ui'
 import { LeadForm } from '../components/LeadForm'
 import { useAuth } from '../auth/useAuth'
@@ -17,7 +17,6 @@ const nav = [
   ['/projetos', 'Projetos', Sparkles],
   ['/financeiro', 'Financeiro', CircleDollarSign],
   ['/relatorios', 'Relatorios', ChartNoAxesCombined],
-  ['/admin/leads', 'Base Origami', Database],
   ['/admin/leads/import', 'Importar JSON', FileJson],
   ['/configuracoes', 'Configuracoes', Settings],
 ] as const
