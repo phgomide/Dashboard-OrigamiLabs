@@ -13,6 +13,9 @@ export type PipelineStatus =
 export type LeadTemperature = 'Quente' | 'Morno' | 'Frio'
 export type Priority = 'Alta' | 'Média' | 'Baixa'
 export type PaymentStatus = 'Não se aplica' | 'Pendente' | 'Parcial' | 'Pago'
+export type OutreachStatus = 'rascunho_gerado' | 'abordado_manual' | 'followup_1_sugerido' | 'followup_1_enviado_manual' | 'followup_2_sugerido' | 'followup_2_enviado_manual' | 'pausado' | 'nao_contatar'
+export type ResponseStatus = 'nao_abordado' | 'sem_resposta' | 'respondeu' | 'pediu_informacoes' | 'reuniao_marcada' | 'resposta_negativa' | 'nao_contatar'
+export type ConversionStatus = 'nao_iniciado' | 'em_conversa' | 'reuniao_marcada' | 'proposta_enviada' | 'convertido' | 'perdido'
 
 export interface Lead {
   id: string
@@ -29,8 +32,11 @@ export interface Lead {
   instagram?: string
   website?: string
   commercialNote?: string
+  personalizedMessage?: string
+  whatsappUrl?: string
   importScore?: number
   importOrigin?: string
+  automationDedupeKey?: string
   projectInterest: string
   pipelineStatus: PipelineStatus
   temperature: LeadTemperature
@@ -38,6 +44,12 @@ export interface Lead {
   estimatedValue: number
   finalValue?: number
   paymentStatus: PaymentStatus
+  outreachStatus?: OutreachStatus
+  responseStatus?: ResponseStatus
+  conversionStatus?: ConversionStatus
+  firstTouchAt?: string
+  lastFollowupAt?: string
+  nextFollowupDate?: string
   nextActionDate?: string
   nextAction?: string
   notes?: string

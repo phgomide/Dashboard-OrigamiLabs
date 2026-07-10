@@ -5,6 +5,8 @@ alter table public.leads add column if not exists whatsapp text;
 alter table public.leads add column if not exists instagram text;
 alter table public.leads add column if not exists website text;
 alter table public.leads add column if not exists commercial_note text;
+alter table public.leads add column if not exists personalized_message text;
+alter table public.leads add column if not exists whatsapp_url text;
 alter table public.leads add column if not exists import_score integer check (import_score is null or import_score between 1 and 5);
 alter table public.leads add column if not exists import_origin text default 'crm_manual';
 

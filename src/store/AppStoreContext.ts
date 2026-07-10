@@ -12,6 +12,7 @@ export interface AppStoreValue {
   addLead: (lead: Lead) => Promise<void>
   updateLead: (id: string, patch: Partial<Lead>) => Promise<void>
   deleteLead: (id: string) => Promise<void>
+  cleanupDuplicateLeads: () => Promise<number>
   moveLead: (id: string, status: PipelineStatus) => Promise<void>
   addActivity: (activity: Activity) => Promise<void>
   updateActivity: (activity: Activity) => Promise<void>

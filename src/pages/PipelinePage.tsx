@@ -6,10 +6,11 @@ import { currency, shortDate } from '../lib/format'
 import { useAppStore } from '../store/useAppStore'
 import type { Lead, PipelineStatus } from '../types'
 
-const columns: PipelineStatus[] = ['Novo lead','Primeiro contato','Conversando','Reunião marcada','Diagnóstico feito','Proposta enviada','Negociação','Fechado','Perdido','Futuro']
+const columns: PipelineStatus[] = ['Primeiro contato','Conversando','Reunião marcada','Diagnóstico feito','Proposta enviada','Negociação','Fechado','Perdido','Futuro']
+const allPipelineStatuses: PipelineStatus[] = ['Novo lead', ...columns]
 type BoardPosition = { x: number; y: number }
 type BoardLayout = Record<PipelineStatus, BoardPosition>
-const layoutKey = 'origami-pipeline-layout-v1'
+const layoutKey = 'origami-pipeline-layout-v2-no-new-lead'
 
 function defaultLayout(): BoardLayout {
   return Object.fromEntries(columns.map((status, index) => [status, { x: (index % 4) * 280, y: Math.floor(index / 4) * 360 }])) as BoardLayout
@@ -39,11 +40,26 @@ function PipelineColumn({ status, leads, onOpen, position }: { status: PipelineS
 }
 
 export function PipelinePage() {
-  const { leads, moveLead } = useAppStore()
+  const { leads, moveLead, updateLead } = useAppStore()
   const [selected, setSelected] = useState<Lead | null>(null)
   const [layout, setLayout] = useState<BoardLayout>(() => loadLayout())
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 5 } }))
   useEffect(() => { localStorage.setItem(layoutKey, JSON.stringify(layout)) }, [layout])
+  useEffect(() => {
+    const now = Date.now()
+    const staleAfterMs = 7 * 24 * 60 * 60 * 1000
+    leads
+      .filter((lead) => lead.pipelineStatus === 'Primeiro contato' && (lead.responseStatus ?? 'sem_resposta') === 'sem_resposta' && lead.firstTouchAt && now - new Date(lead.firstTouchAt).getTime() >= staleAfterMs)
+      .forEach((lead) => {
+        updateLead(lead.id, {
+          pipelineStatus: 'Futuro',
+          outreachStatus: lead.outreachStatus ?? 'abordado_manual',
+          responseStatus: 'sem_resposta',
+          nextAction: 'Sem resposta após 7 dias; retomar só se fizer sentido',
+          nextActionDate: undefined,
+        })
+      })
+  }, [leads, updateLead])
   const boardHeight = Math.max(760, ...Object.values(layout).map((position) => position.y + 330))
   const resetLayout = () => setLayout(defaultLayout())
   const onDragEnd = ({ active, delta, over }: DragEndEvent) => {
@@ -55,7 +71,7 @@ export function PipelinePage() {
     }
     if (over && columns.includes(over.id as PipelineStatus)) moveLead(activeId, over.id as PipelineStatus)
   }
-  return <div className="page page--wide"><section className="page-heading"><div><span className="eyebrow">Jornada comercial</span><h1>Pipeline</h1><p>Arraste os leads entre etapas. Use o ícone de mover no cabeçalho para reposicionar as colunas livremente.</p></div><div className="pipeline-total"><span>Valor total no funil</span><strong>{currency.format(leads.filter((l) => !['Perdido','Fechado'].includes(l.pipelineStatus)).reduce((sum,l) => sum + l.estimatedValue,0))}</strong><Button variant="secondary" onClick={resetLayout}><RotateCcw size={15} />Organizar</Button></div></section><DndContext sensors={sensors} onDragEnd={onDragEnd}><div className="kanban-board kanban-board--free" style={{ height: boardHeight }}>{columns.map((status) => <PipelineColumn key={status} status={status} position={layout[status]} leads={leads.filter((lead) => lead.pipelineStatus === status)} onOpen={setSelected} />)}</div></DndContext>
-    {selected && <Modal title={selected.businessName} onClose={() => setSelected(null)} size="lg"><div className="lead-detail"><div className="lead-detail__summary"><span className="business-avatar business-avatar--large">{selected.businessName.slice(0,2).toUpperCase()}</span><div><h3>{selected.businessName}</h3><p>{selected.niche} · {selected.city}</p></div><strong>{currency.format(selected.estimatedValue)}</strong></div><label className="form-field">Etapa do pipeline<select value={selected.pipelineStatus} onChange={(e) => { const status = e.target.value as PipelineStatus; moveLead(selected.id,status); setSelected({ ...selected,pipelineStatus: status }) }}>{columns.map((status) => <option key={status}>{status}</option>)}</select></label><div className="detail-grid"><div><span>Projeto</span><strong>{selected.projectInterest}</strong></div><div><span>Temperatura</span><strong>{selected.temperature}</strong></div><div><span>Próxima ação</span><strong>{selected.nextAction}</strong></div><div><span>Data</span><strong>{shortDate(selected.nextActionDate)}</strong></div></div><div className="history"><span className="eyebrow">Histórico</span><div><i /><p><strong>Lead atualizado</strong><small>Movido para {selected.pipelineStatus} · {shortDate(selected.updatedAt)}</small></p></div><div><i /><p><strong>Interesse registrado</strong><small>{selected.projectInterest} · {shortDate(selected.createdAt)}</small></p></div></div><button className="pipeline-next" onClick={() => { const index = columns.indexOf(selected.pipelineStatus); const next = columns[Math.min(index + 1, columns.length - 1)]; moveLead(selected.id,next); setSelected({...selected,pipelineStatus:next}) }}>Avançar para próxima etapa<ChevronRight size={17} /></button></div></Modal>}
+  return <div className="page page--wide"><section className="page-heading"><div><span className="eyebrow">Jornada comercial</span><h1>Pipeline</h1><p>Arraste os leads depois do primeiro contato. A coluna Novo lead fica fora do Kanban para não poluir o pipeline.</p></div><div className="pipeline-total"><span>Valor total no funil</span><strong>{currency.format(leads.filter((l) => !['Perdido','Fechado'].includes(l.pipelineStatus)).reduce((sum,l) => sum + l.estimatedValue,0))}</strong><Button variant="secondary" onClick={resetLayout}><RotateCcw size={15} />Organizar</Button></div></section><DndContext sensors={sensors} onDragEnd={onDragEnd}><div className="kanban-board kanban-board--free" style={{ height: boardHeight }}>{columns.map((status) => <PipelineColumn key={status} status={status} position={layout[status]} leads={leads.filter((lead) => lead.pipelineStatus === status)} onOpen={setSelected} />)}</div></DndContext>
+    {selected && <Modal title={selected.businessName} onClose={() => setSelected(null)} size="lg"><div className="lead-detail"><div className="lead-detail__summary"><span className="business-avatar business-avatar--large">{selected.businessName.slice(0,2).toUpperCase()}</span><div><h3>{selected.businessName}</h3><p>{selected.niche} · {selected.city}</p></div><strong>{currency.format(selected.estimatedValue)}</strong></div><label className="form-field">Etapa do pipeline<select value={selected.pipelineStatus} onChange={(e) => { const status = e.target.value as PipelineStatus; moveLead(selected.id,status); setSelected({ ...selected,pipelineStatus: status }) }}>{allPipelineStatuses.map((status) => <option key={status}>{status}</option>)}</select></label><div className="detail-grid"><div><span>Projeto</span><strong>{selected.projectInterest}</strong></div><div><span>Temperatura</span><strong>{selected.temperature}</strong></div><div><span>Próxima ação</span><strong>{selected.nextAction}</strong></div><div><span>Data</span><strong>{shortDate(selected.nextActionDate)}</strong></div></div><div className="history"><span className="eyebrow">Histórico</span><div><i /><p><strong>Lead atualizado</strong><small>Movido para {selected.pipelineStatus} · {shortDate(selected.updatedAt)}</small></p></div><div><i /><p><strong>Interesse registrado</strong><small>{selected.projectInterest} · {shortDate(selected.createdAt)}</small></p></div></div><button className="pipeline-next" onClick={() => { const index = columns.indexOf(selected.pipelineStatus); const next = columns[Math.min(index + 1, columns.length - 1)]; moveLead(selected.id,next); setSelected({...selected,pipelineStatus:next}) }}>Avançar para próxima etapa<ChevronRight size={17} /></button></div></Modal>}
   </div>
 }

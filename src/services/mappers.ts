@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { Activity, Lead, Project, Proposal } from '../types'
+import type { Activity, Lead, OutreachStatus, ResponseStatus, ConversionStatus, Project, Proposal } from '../types'
 
 const optionalText = z.string().trim().max(5000).optional()
 
@@ -17,8 +17,11 @@ export const leadInputSchema = z.object({
   instagram: z.string().trim().max(300).optional(),
   website: z.string().trim().max(500).optional(),
   commercialNote: optionalText,
+  personalizedMessage: optionalText,
+  whatsappUrl: z.string().trim().max(2000).optional(),
   importScore: z.number().int().min(1).max(5).optional(),
   importOrigin: z.string().trim().max(120).optional(),
+  automationDedupeKey: z.string().trim().max(500).optional(),
   projectInterest: z.string().trim().min(1).max(160),
   pipelineStatus: z.enum(['Novo lead', 'Primeiro contato', 'Conversando', 'Reunião marcada', 'Diagnóstico feito', 'Proposta enviada', 'Negociação', 'Fechado', 'Perdido', 'Futuro']),
   temperature: z.enum(['Quente', 'Morno', 'Frio']),
@@ -31,6 +34,12 @@ export const leadInputSchema = z.object({
   notes: optionalText,
   lostReason: z.string().trim().max(500).optional(),
   closedAt: z.string().optional(),
+  outreachStatus: z.enum(['rascunho_gerado','abordado_manual','followup_1_sugerido','followup_1_enviado_manual','followup_2_sugerido','followup_2_enviado_manual','pausado','nao_contatar']).optional(),
+  responseStatus: z.enum(['nao_abordado','sem_resposta','respondeu','pediu_informacoes','reuniao_marcada','resposta_negativa','nao_contatar']).optional(),
+  conversionStatus: z.enum(['nao_iniciado','em_conversa','reuniao_marcada','proposta_enviada','convertido','perdido']).optional(),
+  firstTouchAt: z.string().optional(),
+  lastFollowupAt: z.string().optional(),
+  nextFollowupDate: z.string().max(10).optional(),
 })
 
 type Row = Record<string, unknown>
@@ -54,8 +63,11 @@ export function leadFromRow(row: Row): Lead {
     instagram: maybe(row.instagram),
     website: maybe(row.website),
     commercialNote: maybe(row.commercial_note),
+    personalizedMessage: maybe(row.personalized_message),
+    whatsappUrl: maybe(row.whatsapp_url),
     importScore: row.import_score == null ? undefined : number(row.import_score),
     importOrigin: maybe(row.import_origin),
+    automationDedupeKey: maybe(row.automation_dedupe_key),
     projectInterest: text(row.project_interest),
     pipelineStatus: text(row.pipeline_status) as Lead['pipelineStatus'],
     temperature: text(row.lead_temperature) as Lead['temperature'],
@@ -70,6 +82,12 @@ export function leadFromRow(row: Row): Lead {
     createdAt: text(row.created_at),
     updatedAt: text(row.updated_at),
     closedAt: maybe(row.closed_at),
+    outreachStatus: maybe(row.outreach_status) as OutreachStatus | undefined,
+    responseStatus: maybe(row.response_status) as ResponseStatus | undefined,
+    conversionStatus: maybe(row.conversion_status) as ConversionStatus | undefined,
+    firstTouchAt: maybe(row.first_touch_at),
+    lastFollowupAt: maybe(row.last_followup_at),
+    nextFollowupDate: maybe(row.next_followup_date),
   }
 }
 
@@ -89,8 +107,11 @@ export function leadToRow(input: Lead | Omit<Lead, 'id' | 'createdAt' | 'updated
     instagram: value.instagram || null,
     website: value.website || null,
     commercial_note: value.commercialNote || null,
+    personalized_message: value.personalizedMessage || null,
+    whatsapp_url: value.whatsappUrl || null,
     import_score: value.importScore ?? null,
     import_origin: value.importOrigin || null,
+    automation_dedupe_key: value.automationDedupeKey || null,
     project_interest: value.projectInterest,
     pipeline_status: value.pipelineStatus,
     lead_temperature: value.temperature,
@@ -103,6 +124,12 @@ export function leadToRow(input: Lead | Omit<Lead, 'id' | 'createdAt' | 'updated
     notes: value.notes || null,
     lost_reason: value.lostReason || null,
     closed_at: value.closedAt || null,
+    outreach_status: value.outreachStatus || null,
+    response_status: value.responseStatus || null,
+    conversion_status: value.conversionStatus || null,
+    first_touch_at: value.firstTouchAt || null,
+    last_followup_at: value.lastFollowupAt || null,
+    next_followup_date: value.nextFollowupDate || null,
   }
 }
 

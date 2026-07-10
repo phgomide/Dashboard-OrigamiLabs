@@ -24,7 +24,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     if (demoMode) { setLeads(demoLeads()); setActivities(initialActivities); setProposals(initialProposals); setProjects(initialProjects); setLoading(false); return }
     let active=true; setLoading(true); setError(null)
     Promise.all([leadService.listLeads(),activityService.listActivities(),proposalService.listProposals(),projectService.listProjects()])
-      .then(([nextLeads,nextActivities,nextProposals,nextProjects]) => { if(active){setLeads(nextLeads);setActivities(nextActivities);setProposals(nextProposals);setProjects(nextProjects)} })
+      .then(async([nextLeads,nextActivities,nextProposals,nextProjects]) => {
+        if (!active) return
+        if (leadService.countCleanupEligibleDuplicateExtras(leadService.findDuplicateLeadGroups(nextLeads)) > 0) {
+          const deleted = await leadService.cleanupDuplicateLeads()
+          if (deleted > 0) nextLeads = await leadService.listLeads()
+        }
+        if(active){setLeads(nextLeads);setActivities(nextActivities);setProposals(nextProposals);setProjects(nextProjects)}
+      })
       .catch(() => { if(active)setError('Não foi possível carregar o workspace. Verifique a conexão e tente novamente.') })
       .finally(() => { if(active)setLoading(false) })
     return () => { active=false }
@@ -32,7 +39,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (demoMode) return
     const reloadLeads = () => {
-      leadService.listLeads().then(setLeads).catch(() => setError('Nao foi possivel atualizar os leads importados.'))
+      leadService.listLeads()
+        .then(async (nextLeads) => {
+          if (leadService.countCleanupEligibleDuplicateExtras(leadService.findDuplicateLeadGroups(nextLeads)) > 0) {
+            const deleted = await leadService.cleanupDuplicateLeads()
+            if (deleted > 0) return leadService.listLeads()
+          }
+          return nextLeads
+        })
+        .then(setLeads)
+        .catch(() => setError('Nao foi possivel atualizar os leads importados.'))
     }
     window.addEventListener('origami:leads-imported', reloadLeads)
     return () => window.removeEventListener('origami:leads-imported', reloadLeads)
@@ -42,6 +58,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const addLead=useCallback(async(lead:Lead)=>{const saved=demoMode?lead:await leadService.createLead(lead);setLeads((items)=>[saved,...items])},[demoMode])
   const updateLead=useCallback(async(id:string,patch:Partial<Lead>)=>{const current=leads.find((item)=>item.id===id);if(!current)return;const saved=demoMode?{...current,...patch,updatedAt:new Date().toISOString()}:await leadService.updateLead(id,patch,current);setLeads((items)=>items.map((item)=>item.id===id?saved:item))},[demoMode,leads])
   const deleteLead=useCallback(async(id:string)=>{if(!demoMode)await leadService.deleteLead(id);setLeads((items)=>items.filter((item)=>item.id!==id))},[demoMode])
+  const cleanupDuplicateLeads=useCallback(async()=>{
+    if (demoMode) {
+      const result = leadService.cleanupDuplicateLeadsLocal(leads)
+      setLeads(result.leads)
+      return result.deletedCount
+    }
+    const deleted = await leadService.cleanupDuplicateLeads()
+    if (deleted > 0) setLeads(await leadService.listLeads())
+    return deleted
+  },[demoMode,leads])
   const addActivity=useCallback(async(value:Activity)=>{const saved=demoMode?value:await activityService.createActivity(value);setActivities((items)=>[saved,...items])},[demoMode])
   const updateActivity=useCallback(async(value:Activity)=>{const saved=demoMode?value:await activityService.updateActivity(value.id,value);setActivities((items)=>items.map((item)=>item.id===value.id?saved:item))},[demoMode])
   const deleteActivity=useCallback(async(id:string)=>{if(!demoMode)await activityService.deleteActivity(id);setActivities((items)=>items.filter((item)=>item.id!==id))},[demoMode])
@@ -52,6 +78,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const updateProject=useCallback(async(value:Project)=>{const saved=demoMode?value:await projectService.updateProject(value.id,value);setProjects((items)=>items.map((item)=>item.id===value.id?saved:item))},[demoMode])
   const deleteProject=useCallback(async(id:string)=>{if(!demoMode)await projectService.deleteProject(id);setProjects((items)=>items.filter((item)=>item.id!==id))},[demoMode])
 
-  const value=useMemo<AppStoreValue>(()=>({leads,activities,proposals,projects,loading,error,dataSource:demoMode?'demo':'supabase',addLead,updateLead,deleteLead,moveLead:(id,status)=>updateLead(id,{pipelineStatus:status}),addActivity,updateActivity,deleteActivity,toggleActivity:async(id)=>{const item=activities.find((entry)=>entry.id===id);if(item)await updateActivity({...item,status:item.status==='Concluída'?'Pendente':'Concluída'})},addProposal,updateProposal,deleteProposal,addProject,updateProject,deleteProject}),[leads,activities,proposals,projects,loading,error,demoMode,addLead,updateLead,deleteLead,addActivity,updateActivity,deleteActivity,addProposal,updateProposal,deleteProposal,addProject,updateProject,deleteProject])
+  const value=useMemo<AppStoreValue>(()=>({leads,activities,proposals,projects,loading,error,dataSource:demoMode?'demo':'supabase',addLead,updateLead,deleteLead,cleanupDuplicateLeads,moveLead:(id,status)=>updateLead(id,{pipelineStatus:status}),addActivity,updateActivity,deleteActivity,toggleActivity:async(id)=>{const item=activities.find((entry)=>entry.id===id);if(item)await updateActivity({...item,status:item.status==='Concluída'?'Pendente':'Concluída'})},addProposal,updateProposal,deleteProposal,addProject,updateProject,deleteProject}),[leads,activities,proposals,projects,loading,error,demoMode,addLead,updateLead,deleteLead,cleanupDuplicateLeads,addActivity,updateActivity,deleteActivity,addProposal,updateProposal,deleteProposal,addProject,updateProject,deleteProject])
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>
 }
